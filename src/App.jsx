@@ -1,8 +1,75 @@
+import { DndContext, PointerSensor, useSensor, rectIntersection, useSensors, DragOverlay } from '@dnd-kit/core';
 import Boards from './components/Boards';
 import Controller from './components/Controller';
+import { useState } from 'react';
+import { useBoardStore } from './store';
+import { arrayMove } from '@dnd-kit/sortable';
 
 function App() {
+  const { data, updateBoardType, reorderItems } = useBoardStore();
+const [activeId, setActiveId] = useState(null);
+const activeItem = activeId ? data.find((item) => item.id === activeId) : null
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      }
+    })
+  );
+
+  const handleDragStart = (event) => {
+    const { active } = event;
+    setActiveId(active.id);
+  };
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    if (!over) {
+      setActiveId(null);
+      return;
+    }
+
+    const activeItem = data.find((item) => item.id === active.id);
+    if (!activeItem) {
+      setActiveId(null);
+      return;
+    }
+
+    if (over.data?.current?.type && activeItem.type !== over.data.current.type) {
+      updateBoardType(active.id, over.data.current.type);
+    }
+    else if (over.id !== active.id) {
+      const activeIndex = data.findIndex((item) => item.id === active.id);
+      const overIndex = data.findIndex((item) => item.id === over.id);
+
+      if (activeIndex !== -1 && overIndex !== -1) {
+        const newItems = arrayMove(data, activeIndex, overIndex);
+        reorderItems(newItems);
+      }
+    }
+
+    setActiveId(null);
+  };
+  const handleDragOver = (event) => {
+    const { active, over } = event;
+
+    if (!over) return;
+
+    const activeItem = data.find((item) => item.id === active.id);
+    if (!activeItem) return;
+    if (over.data?.current?.type && activeItem.type !== over.data.current.type && active.id !== over.id) {
+      updateBoardType(active.id, over.data.current.type);
+    }
+  };
   return (
+    <DndContext 
+    sensors={sensors}
+    collisionDetection={rectIntersection}
+    onDragStart={handleDragStart}
+    onDragEnd={handleDragEnd}
+    onDragOver={handleDragOver}
+    >
+
     <div className="flex flex-col h-screen">
       <header className="w-full h-[80px] bg-slate-800 flex flex-col items-center justify-center text-stone-100">
         <p className="text-lg font-semibold">Kanban Board Project</p>
@@ -20,6 +87,23 @@ function App() {
         <p>&copy; OZ-CodingSchool</p>
       </footer>
     </div>
+
+    <DragOverlay>
+        {activeId && activeItem && (
+          <div className="bg-white shadow-xl rounded-md p-4 w-full">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{activeItem.title}</h3>
+              {activeItem.type === 'todo' && <div className="animate-pulse w-2 h-2 rounded-full bg-green-500"></div>}
+              {activeItem.type === 'inprogress' && (
+                <div className="animate-pulse w-2 h-2 rounded-full bg-amber-500"></div>
+              )}
+              {activeItem.type === 'done' && <div className="animate-pulse w-2 h-2 rounded-full bg-red-500"></div>}
+            </div>
+            <p className="text-sm text-gray-500">{activeItem.created_at}</p>
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }
 
